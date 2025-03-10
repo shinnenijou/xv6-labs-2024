@@ -7,6 +7,8 @@
 #define NUM_START 2
 #define NUM_END 280
 
+static int prime(int rdfd, int wrfd) __attribute__((noreturn));
+
 static int prime(int rdfd, int wrfd)
 {
     int pipefd[2];
@@ -14,37 +16,36 @@ static int prime(int rdfd, int wrfd)
     int num = 0;
     int pid = 0;
 
+    if (read(rdfd, &p, sizeof(int)) < 0)
+    {
+        exit(1);
+    }
+
+    printf("prime %d\n", p);
+
     while (read(rdfd, &num, sizeof(int)) > 0)
     {
-        if (p == 0)
+        if (num % p == 0)
         {
-            p = num;
-            printf("prime %d\n", p);
+            continue;
         }
-        else if (num % p != 0)
-        {
-            if (pid == 0) /* no child yet */
-            {
-                pipe(pipefd);
 
-                if ((pid = fork()) == 0) /* child */
-                {
-                    p = 0;
-                    rdfd = pipefd[PIPE_RD];
-                    close(pipefd[PIPE_WR]);
-                }
-                else /* parent */
-                {
-                    wrfd = pipefd[PIPE_WR];
-                    close(pipefd[PIPE_RD]);
-                }
+        if (pid == 0) /* no child yet */
+        {
+            pipe(pipefd);
+
+            if ((pid = fork()) == 0) /* child */
+            {
+                close(rdfd);
+                close(pipefd[PIPE_WR]);
+                prime(pipefd[PIPE_RD], -1); /* will exit in prime() function */
             }
 
-            if (pid != 0)
-            {
-                write(wrfd, &num, sizeof(int));
-            }
+            wrfd = pipefd[PIPE_WR];
+            close(pipefd[PIPE_RD]);
         }
+
+        write(wrfd, &num, sizeof(int));
     }
 
     close(rdfd);
