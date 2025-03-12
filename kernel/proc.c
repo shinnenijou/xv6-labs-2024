@@ -251,6 +251,9 @@ userinit(void)
 
   p->state = RUNNABLE;
 
+  // init process trace nothing. all processes inherit from this
+  p->tracemask = 0;
+
   release(&p->lock);
 }
 
@@ -321,6 +324,8 @@ fork(void)
   acquire(&np->lock);
   np->state = RUNNABLE;
   release(&np->lock);
+
+  np->tracemask = p->tracemask;
 
   return pid;
 }
