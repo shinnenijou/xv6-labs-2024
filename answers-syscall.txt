@@ -1,0 +1,20 @@
+Q: Looking at the backtrace output, which function called syscall?
+A: That is usertrap () called syscall().
+
+Q: What is the value of p->trapframe->a7 and what does that value represent?
+A: the value of p->trapframe->a7 is 0x7, this represents the syscall no. of the caller wanna call.
+
+Q: What was the previous mode that the CPU was in?
+A: Since this syscall was called by usertrap(), which checked the previous user mode thus the previous mode was exactly user mode.
+
+Q: Write down the assembly instruction the kernel is panicing at. Which register corresponds to the variable num?
+A: The kernel was panicing at instruction
+   80001c82:	00002683          	lw	a3,0(zero) # 0 <_entry-0x80000000>
+   where register %a3 corresponds to the variable num. 
+
+Q: Why does the kernel crash? Hint: look at figure 3-3 in the text; is address 0 mapped in the kernel address space? Is that confirmed by the value in scause above?
+A: The value of scause (0xd) indicates the trap was caused by an Instruction page fault. The reason is that virtual memory has been initialized here then the address 0 is not in the the kernel address space. 
+   When the kernel try to access the address 0 and that triggered a page fault, but then the kernel cannot find the mapped physical address for the address 0. 
+
+Q: What is the name of the process that was running when the kernel paniced? What is its process id (pid)?
+A: Process name is initcode. process id is 1.
