@@ -18,3 +18,8 @@ A: The value of scause (0xd) indicates the trap was caused by an Instruction pag
 
 Q: What is the name of the process that was running when the kernel paniced? What is its process id (pid)?
 A: Process name is initcode. process id is 1.
+
+Q: user/secret.c copies the secret bytes to memory whose address is 32 bytes after the start of a page. Change the 32 to 0 and you should see that your attack doesn't work anymore; why not?
+A: The reason is, the kernel use a free list to manage free physical memory, then when previous process free its memory, the kernel writes the first 8-byte to save the address of free list node.(see kernel/kalloc.c) 
+   As a result, all data which was wrotten by user in the first 8-byte of a page will be overwrotten destructively by the kernel.
+   To verify this, I modified the writing offset in secret.c to 8 and modify corresponding macro in attack.c, attacktest still worked.
