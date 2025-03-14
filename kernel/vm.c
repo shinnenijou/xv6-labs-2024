@@ -488,9 +488,32 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 
 
 #ifdef LAB_PGTBL
+static void
+printwalk(pagetable_t pagetable, uint64 level, uint64 base_va){
+    // there are 2^9 = 512 PTEs in a page table.
+    for(uint64 i = 0; i < 512; i++){
+      pte_t pte = pagetable[i];
+      if (!(pte & PTE_V))
+        continue;
+
+      for (uint64 i = 3; i > level; --i){
+        printf(" ..");
+      }
+
+      uint64 va = base_va;
+      va |= (i & PXMASK) << PXSHIFT(level);
+      printf("%p: pte %p pa %p\n", (void*)va, (void*)pte, (void*)PTE2PA(pte));
+
+      if (level > 0){
+        printwalk((pagetable_t)PTE2PA(pte), level - 1, va);
+      }
+    }
+}
+
 void
 vmprint(pagetable_t pagetable) {
-  // your code here
+  printf("page table %p\n", pagetable);
+  printwalk(pagetable, 2, 0);
 }
 #endif
 
