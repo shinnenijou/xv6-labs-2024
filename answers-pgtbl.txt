@@ -21,3 +21,7 @@ A: Run pgtbltest then we got the output, most of then entries are zeros and in  
    va 0xFFFFE000 pte 0x21FD08C7 pa 0x87F42000 perm 0xC7     // permission: 11000111 -> Valid | Readable | Writable | Accessed | Dirty. This page refers to the trapframe, in which process status will be stored when trapping into the kernel.
    va 0xFFFFF000 pte 0x2000184B pa 0x80006000 perm 0x4B     // permission: 01001011 -> Valid | Readable | Executable | Accessed. This page refers to the trampoline (e.g., code of the kernel which execute transit into the kernel and back)
 
+Q: Which other xv6 system call(s) could be made faster using this shared page? Explain how.
+A: Those which is read and only read the data shared with kernel could be made faster by this way.
+   For example, when call sbrk() with argument 0, the current heap size will be returned and this data is a read-only data which shared by the kernel. 
+   So it is possible to store/update the heap size in the shared page then user can read this data when call sbrk() with zero and without trapping into the kernel.
