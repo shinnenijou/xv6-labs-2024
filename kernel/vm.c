@@ -286,19 +286,29 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
   char *mem;
   uint64 a;
   int sz, level;
+  int hassuper = 1;
 
   if(newsz < oldsz)
     return oldsz;
 
   oldsz = PGROUNDUP(oldsz);
   for(a = oldsz; a < newsz; a += sz){
-    int superpage = newsz - a >= SUPERPGSIZE && a % SUPERPGSIZE == 0;
+    int superpage = hassuper && newsz - a >= SUPERPGSIZE && a % SUPERPGSIZE == 0;
 
     level = superpage ? 1 : 0;
     sz = superpage ? SUPERPGSIZE : PGSIZE;
     mem = superpage ? ksuperalloc() : kalloc();
 
-    if(mem == 0){
+    // super page failed. cache the result then try normal page
+    if(mem == 0 && superpage){
+      level = 0;
+      sz = PGSIZE;
+      hassuper = 0;
+      mem = kalloc();
+    }
+
+    // still failed
+    if (mem == 0){
       uvmdealloc(pagetable, a, oldsz);
       return 0;
     }
