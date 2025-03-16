@@ -121,6 +121,25 @@ walk(pagetable_t pagetable, uint64 va, int alloc, int plevel)
   return &pagetable[PX(0, va)];
 }
 
+// A wrapper function to look up pte of a virtual address
+// where page may be a super page or a normal page
+// return 0 if not mapped
+pte_t *walkpte(pagetable_t pagetable, uint64 va){
+  if(va >= MAXVA)
+    return 0;
+
+  pte_t *pte = 0;
+
+  // try super page firstly
+  pte = walk(pagetable, va, 0, 1);
+
+  if (pte && !PTE_LEAF(*pte)){
+    pte = walk(pagetable, va, 0, 0);
+  }
+
+  return pte;
+}
+
 // Look up a virtual address, return the physical address,
 // or 0 if not mapped.
 // Can only be used to look up user pages.
@@ -133,7 +152,7 @@ walkaddr(pagetable_t pagetable, uint64 va)
   if(va >= MAXVA)
     return 0;
 
-  pte = walk(pagetable, va, 0, 0);
+  pte = walkpte(pagetable, va);
   if(pte == 0)
     return 0;
   if((*pte & PTE_V) == 0)
@@ -419,11 +438,11 @@ err:
 void
 uvmclear(pagetable_t pagetable, uint64 va)
 {
-  pte_t *pte;
-  
-  pte = walk(pagetable, va, 0, 0);
+  pte_t *pte = walkpte(pagetable, va);
+
   if(pte == 0)
     panic("uvmclear");
+
   *pte &= ~PTE_U;
 }
 
@@ -440,11 +459,10 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
     va0 = PGROUNDDOWN(dstva);
     if (va0 >= MAXVA)
       return -1;
-    if((pte = walk(pagetable, va0, 0, 0)) == 0) {
+    if((pte = walkpte(pagetable, va0)) == 0) {
       // printf("copyout: pte should exist 0x%x %d\n", dstva, len);
       return -1;
     }
-
 
     // forbid copyout over read-only user text pages.
     if((*pte & PTE_W) == 0)
