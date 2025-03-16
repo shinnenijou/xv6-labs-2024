@@ -353,8 +353,27 @@ freewalk(pagetable_t pagetable)
 void
 uvmfree(pagetable_t pagetable, uint64 sz)
 {
-  if(sz > 0)
-    uvmunmap(pagetable, 0, 0, PGROUNDUP(sz) /PGSIZE, 1);
+  uint64 page_size;
+  sz = PGROUNDUP(sz);
+
+  for (uint64 va = 0; va < sz; va += page_size){
+    // try super page firstly
+    page_size = SUPERPGSIZE;
+    int level = 1;
+
+    pte_t *pte = walk(pagetable, va, 0, level);
+
+    if (pte == 0)
+      panic("uvmfree");
+
+    if (!PTE_LEAF(*pte)){
+      page_size = PGSIZE;
+      level = 0;
+    }
+
+    uvmunmap(pagetable, level, va, 1, 1);
+  }
+
   freewalk(pagetable);
 }
 
