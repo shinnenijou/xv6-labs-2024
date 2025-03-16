@@ -118,7 +118,7 @@ walk(pagetable_t pagetable, uint64 va, int alloc, int plevel)
       *pte = PA2PTE(pagetable) | PTE_V;
     }
   }
-  return &pagetable[PX(0, va)];
+  return &pagetable[PX(plevel, va)];
 }
 
 // A wrapper function to look up pte of a virtual address
@@ -285,15 +285,19 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
 {
   char *mem;
   uint64 a;
-  int sz;
+  int sz, level;
 
   if(newsz < oldsz)
     return oldsz;
 
   oldsz = PGROUNDUP(oldsz);
   for(a = oldsz; a < newsz; a += sz){
-    sz = PGSIZE;
-    mem = kalloc();
+    int superpage = newsz - a >= SUPERPGSIZE && a % SUPERPGSIZE == 0;
+
+    level = superpage ? 1 : 0;
+    sz = superpage ? SUPERPGSIZE : PGSIZE;
+    mem = superpage ? ksuperalloc() : kalloc();
+
     if(mem == 0){
       uvmdealloc(pagetable, a, oldsz);
       return 0;
@@ -301,8 +305,8 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
 #ifndef LAB_SYSCALL
     memset(mem, 0, sz);
 #endif
-    if(mappages(pagetable, 0, a, sz, (uint64)mem, PTE_R |PTE_U|xperm) != 0){
-      kfree(mem);
+    if(mappages(pagetable, level, a, sz, (uint64)mem, PTE_R |PTE_U|xperm) != 0){
+      superpage ? ksuperfree(mem) : kfree(mem);
       uvmdealloc(pagetable, a, oldsz);
       return 0;
     }
@@ -320,9 +324,24 @@ uvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
   if(newsz >= oldsz)
     return oldsz;
 
-  if(PGROUNDUP(newsz) < PGROUNDUP(oldsz)){
-    int npages = (PGROUNDUP(oldsz) - PGROUNDUP(newsz)) / PGSIZE;
-    uvmunmap(pagetable, 0, PGROUNDUP(newsz), npages, 1);
+  uint64 page_size;
+
+  for (uint64 va = PGROUNDUP(newsz); va < PGROUNDUP(oldsz); va += page_size){
+    // try super page firstly
+    page_size = SUPERPGSIZE;
+    int level = 1;
+
+    pte_t *pte = walk(pagetable, va, 0, level);
+
+    if (pte == 0)
+      panic("uvmfree");
+
+    if (!PTE_LEAF(*pte)){
+      page_size = PGSIZE;
+      level = 0;
+    }
+
+    uvmunmap(pagetable, level, va, 1, 1);
   }
 
   return newsz;
