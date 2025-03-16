@@ -437,14 +437,15 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
 
-    if ((mem = page_size == SUPERPGSIZE ? ksuperalloc() : kalloc()) == 0)
+    if ((mem = page_size == SUPERPGSIZE ? ksuperalloc() : kalloc()) == 0){
       goto err;
+    }
 
     memmove(mem, (char*)pa, page_size);
 
     if (mappages(new, plevel, va, page_size, (uint64)mem, flags) != 0)
     {
-      ksuperfree(mem);
+      page_size == SUPERPGSIZE ? ksuperfree(mem) : kfree(mem);
       goto err;
     }
   }
@@ -456,7 +457,7 @@ err:
     // try super page firstly
     page_size = SUPERPGSIZE;
     plevel = 1;
-    pte = walk(old, va, 0, plevel);
+    pte = walk(new, free_va, 0, plevel);
 
     // try normal page if super page not found
     if (!PTE_LEAF(*pte))
