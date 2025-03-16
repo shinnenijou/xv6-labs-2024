@@ -151,42 +151,44 @@ walkaddr(pagetable_t pagetable, uint64 va)
 void
 kvmmap(pagetable_t kpgtbl, uint64 va, uint64 pa, uint64 sz, int perm)
 {
-  if(mappages(kpgtbl, va, sz, pa, perm) != 0)
+  if(mappages(kpgtbl, 0, va, sz, pa, perm) != 0)
     panic("kvmmap");
 }
 
 // Create PTEs for virtual addresses starting at va that refer to
 // physical addresses starting at pa.
-// va and size MUST be page-aligned.
+// plevel indicates page size, where is a 2-megabyte superpage if plevel == 1 and normal 4096-byte page if plevel == 0
+// va and size MUST be both page-aligned or superpage-aligned
 // Returns 0 on success, -1 if walk() couldn't
 // allocate a needed page-table page.
 int
-mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
+mappages(pagetable_t pagetable, int plevel, uint64 va, uint64 size, uint64 pa, int perm)
 {
   uint64 a, last;
   pte_t *pte;
+  uint64 alignment = ALIGNMENT(plevel);
 
-  if((va % PGSIZE) != 0)
+  if((va % alignment) != 0)
     panic("mappages: va not aligned");
 
-  if((size % PGSIZE) != 0)
+  if((size % alignment) != 0)
     panic("mappages: size not aligned");
 
   if(size == 0)
     panic("mappages: size");
   
   a = va;
-  last = va + size - PGSIZE;
+  last = va + size - alignment;
   for(;;){
-    if((pte = walk(pagetable, a, 1, 0)) == 0)
+    if((pte = walk(pagetable, a, 1, plevel)) == 0)
       return -1;
     if(*pte & PTE_V)
       panic("mappages: remap");
     *pte = PA2PTE(pa) | perm | PTE_V;
     if(a == last)
       break;
-    a += PGSIZE;
-    pa += PGSIZE;
+    a += alignment;
+    pa += alignment;
   }
   return 0;
 }
@@ -247,7 +249,7 @@ uvmfirst(pagetable_t pagetable, uchar *src, uint sz)
     panic("uvmfirst: more than a page");
   mem = kalloc();
   memset(mem, 0, PGSIZE);
-  mappages(pagetable, 0, PGSIZE, (uint64)mem, PTE_W|PTE_R|PTE_X|PTE_U);
+  mappages(pagetable, 0, 0, PGSIZE, (uint64)mem, PTE_W |PTE_R|PTE_X|PTE_U);
   memmove(mem, src, sz);
 }
 
@@ -275,7 +277,7 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
 #ifndef LAB_SYSCALL
     memset(mem, 0, sz);
 #endif
-    if(mappages(pagetable, a, sz, (uint64)mem, PTE_R|PTE_U|xperm) != 0){
+    if(mappages(pagetable, 0, a, sz, (uint64)mem, PTE_R |PTE_U|xperm) != 0){
       kfree(mem);
       uvmdealloc(pagetable, a, oldsz);
       return 0;
@@ -359,7 +361,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     if((mem = kalloc()) == 0)
       goto err;
     memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
+    if(mappages(new, 0, i, PGSIZE, (uint64)mem, flags) != 0){
       kfree(mem);
       goto err;
     }
