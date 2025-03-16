@@ -218,9 +218,9 @@ proc_pagetable(struct proc *p)
   return pagetable;
 
  bad_usyscall:
-  uvmunmap(pagetable, TRAPFRAME, 1, 0);
+  uvmunmap(pagetable, 0, TRAPFRAME, 1, 0);
  bad_trapframe:
-  uvmunmap(pagetable, TRAMPOLINE, 1, 0);
+  uvmunmap(pagetable, 0, TRAMPOLINE, 1, 0);
  bad_trampoline:
   uvmfree(pagetable, 0);
   return 0;
@@ -231,9 +231,9 @@ proc_pagetable(struct proc *p)
 void
 proc_freepagetable(pagetable_t pagetable, uint64 sz)
 {
-  uvmunmap(pagetable, TRAMPOLINE, 1, 0);
-  uvmunmap(pagetable, TRAPFRAME, 1, 0);
-  uvmunmap(pagetable, USYSCALL, 1, 0);
+  uvmunmap(pagetable, 0, TRAMPOLINE, 1, 0);
+  uvmunmap(pagetable, 0, TRAPFRAME, 1, 0);
+  uvmunmap(pagetable, 0, USYSCALL, 1, 0);
   uvmfree(pagetable, sz);
 }
 

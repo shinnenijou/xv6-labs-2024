@@ -193,22 +193,24 @@ mappages(pagetable_t pagetable, int plevel, uint64 va, uint64 size, uint64 pa, i
   return 0;
 }
 
-// Remove npages of mappings starting from va. va must be
-// page-aligned. The mappings must exist.
+// Remove npages of mappings starting from va.
+// plevel indicates page size, where is a 2-megabyte superpage if plevel == 1 and normal 4096-byte page if plevel == 0
+// va must be page-aligned or superpage-aligned. The mappings must exist.
 // Optionally free the physical memory.
 void
-uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
+uvmunmap(pagetable_t pagetable, int plevel, uint64 va, uint64 npages, int do_free)
 {
   uint64 a;
   pte_t *pte;
   int sz;
+  uint64 alignment = ALIGNMENT(plevel);
 
-  if((va % PGSIZE) != 0)
+  if((va % alignment) != 0)
     panic("uvmunmap: not aligned");
 
-  for(a = va; a < va + npages*PGSIZE; a += sz){
-    sz = PGSIZE;
-    if((pte = walk(pagetable, a, 0, 0)) == 0)
+  for(a = va; a < va + npages * alignment; a += sz){
+    sz = alignment;
+    if((pte = walk(pagetable, a, 0, plevel)) == 0)
       panic("uvmunmap: walk");
     if((*pte & PTE_V) == 0) {
       printf("va=%ld pte=%ld\n", a, *pte);
@@ -218,7 +220,10 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
       panic("uvmunmap: not a leaf");
     if(do_free){
       uint64 pa = PTE2PA(*pte);
-      kfree((void*)pa);
+      if (alignment == SUPERPGSIZE)
+        ksuperfree((void*)pa);
+      else
+        kfree((void*)pa);
     }
     *pte = 0;
   }
@@ -298,7 +303,7 @@ uvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 
   if(PGROUNDUP(newsz) < PGROUNDUP(oldsz)){
     int npages = (PGROUNDUP(oldsz) - PGROUNDUP(newsz)) / PGSIZE;
-    uvmunmap(pagetable, PGROUNDUP(newsz), npages, 1);
+    uvmunmap(pagetable, 0, PGROUNDUP(newsz), npages, 1);
   }
 
   return newsz;
@@ -330,7 +335,7 @@ void
 uvmfree(pagetable_t pagetable, uint64 sz)
 {
   if(sz > 0)
-    uvmunmap(pagetable, 0, PGROUNDUP(sz)/PGSIZE, 1);
+    uvmunmap(pagetable, 0, 0, PGROUNDUP(sz) /PGSIZE, 1);
   freewalk(pagetable);
 }
 
@@ -369,7 +374,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   return 0;
 
  err:
-  uvmunmap(new, 0, i / PGSIZE, 1);
+  uvmunmap(new, 0, 0, i / PGSIZE, 1);
   return -1;
 }
 
