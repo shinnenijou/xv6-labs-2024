@@ -348,33 +348,69 @@ uvmfree(pagetable_t pagetable, uint64 sz)
 int
 uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 {
-  pte_t *pte;
-  uint64 pa, i;
+  pte_t* pte;
+  uint64 pa, va, page_size;
   uint flags;
-  char *mem;
-  int szinc;
+  char* mem;
+  int plevel;
 
-  for(i = 0; i < sz; i += szinc){
-    szinc = PGSIZE;
-    szinc = PGSIZE;
-    if((pte = walk(old, i, 0, 0)) == 0)
+  // va indicates such space which have been copied successfully
+  for (va = 0; va < sz; va += page_size)
+  {
+    // try super page firstly
+    page_size = SUPERPGSIZE;
+    plevel = 1;
+    if ((pte = walk(old, va, 0, plevel)) == 0)
       panic("uvmcopy: pte should exist");
-    if((*pte & PTE_V) == 0)
+
+    // try normal page if super page not found
+    if (!PTE_LEAF(*pte))
+    {
+      page_size = PGSIZE;
+      plevel = 0;
+      if ((pte = walk(old, va, 0, plevel)) == 0)
+        panic("uvmcopy: pte should exist");
+    }
+
+    // pte should be valid regardless of normal page or super page
+    if ((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
+
+    // That pte is leaf indicates a 2mega-byte super page.
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
+
+    if ((mem = page_size == SUPERPGSIZE ? ksuperalloc() : kalloc()) == 0)
       goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, 0, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
+
+    memmove(mem, (char*)pa, page_size);
+
+    if (mappages(new, plevel, va, page_size, (uint64)mem, flags) != 0)
+    {
+      ksuperfree(mem);
       goto err;
     }
   }
   return 0;
 
- err:
-  uvmunmap(new, 0, 0, i / PGSIZE, 1);
+err:
+  for (uint64 free_va = 0; free_va < va; free_va += page_size)
+  {
+    // try super page firstly
+    page_size = SUPERPGSIZE;
+    plevel = 1;
+    pte = walk(old, va, 0, plevel);
+
+    // try normal page if super page not found
+    if (!PTE_LEAF(*pte))
+    {
+      page_size = PGSIZE;
+      plevel = 0;
+    }
+
+    uvmunmap(new, plevel, free_va, 1, 1);
+  }
+
   return -1;
 }
 
