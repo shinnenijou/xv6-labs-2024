@@ -226,14 +226,30 @@ static int useralarm(struct proc* p){
   if (p->alarm_interval == 0){
     return 0;
   }
+
+  // alarm is handling
+  if (p->alarm_elapse == -1){
+    return 0;
+  }
   
   ++p->alarm_elapse;
 
   if (p->alarm_elapse == p->alarm_interval){
+    // -1 indicates handling
+    p->alarm_elapse = -1;
+    
+    // store return address
+    p->alarm_epc = p->trapframe->epc;
+    
+    // user may be interrupted at any time (any execution position) then call to handler
+    // 1) caller-saved registers will be destructed by the handler
+    // 2) callee-saved registers will be stored at  the stack frame of the alarm handler
+    //    but syscall to sys_sigreturn will never return to the alarm handler
+    //    thus all registers should be stored when invoking alarm handler.
+    uint64 n = sizeof(struct trapframe) - ((char *)&p->trapframe->ra - (char *)p->trapframe);
+    memmove(&p->alarm_frame.ra, &p->trapframe->ra, n);
+
     p->trapframe->epc = p->alarm_handler;
-    p->alarm_elapse = 0;
-    p->alarm_interval = 0;
-    p->alarm_handler = 0;
   }
 
   return 0;

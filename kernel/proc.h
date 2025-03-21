@@ -107,4 +107,6 @@ struct proc {
   int alarm_interval;          // Sig alarm interval ticks
   int alarm_elapse;            // elapsed ticks since last alarm
   uint64 alarm_handler;        // alarm handler address (in user's va)
+  uint64 alarm_epc;            // store previous epc before invoke alarm handler. restore in sigreturn
+  struct trapframe alarm_frame;// context before invoke alarm handler. restore in sigreturn
 };

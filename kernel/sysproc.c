@@ -122,5 +122,20 @@ sys_sigalarm(void)
 uint64
 sys_sigreturn(void)
 {
-  return 0;
+  struct proc *p = myproc();
+
+  if (p->alarm_interval == 0)
+  {
+    return -1;
+  }
+  
+  p->alarm_elapse = 0;
+  p->trapframe->epc = p->alarm_epc;
+
+  // restore all registers
+  // see kernel/trap.c:useralarm()
+  uint64 n = sizeof(struct trapframe) - ((char *)&p->trapframe->ra - (char *)p->trapframe);
+  memmove(&p->trapframe->ra, &p->alarm_frame.ra, n);
+
+  return p->trapframe->a0;
 }
