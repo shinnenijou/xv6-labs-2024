@@ -238,16 +238,28 @@ static int useralarm(struct proc* p){
     // -1 indicates handling
     p->alarm_elapse = -1;
     
-    // store return address
-    p->alarm_epc = p->trapframe->epc;
+    // tricky: to exploit the fact that a callee will preserve callee-saved resgisters, 
+    // let the control return from the alarm handler normally by set ra to epc
+    // then the kernel not need to restore callee-saved registers.
+    p->trapframe->ra = p->trapframe->epc;
     
     // user may be interrupted at any time (any execution position) then call to handler
-    // 1) caller-saved registers will be destructed by the handler
-    // 2) callee-saved registers will be stored at  the stack frame of the alarm handler
-    //    but syscall to sys_sigreturn will never return to the alarm handler
-    //    thus all registers should be stored when invoking alarm handler.
-    uint64 n = sizeof(struct trapframe) - ((char *)&p->trapframe->ra - (char *)p->trapframe);
-    memmove(&p->alarm_frame.ra, &p->trapframe->ra, n);
+    // store caller-saved registers since those may be destructed by the handler
+    p->alarm_context.t0 = p->trapframe->t0;
+    p->alarm_context.t1 = p->trapframe->t1;
+    p->alarm_context.t2 = p->trapframe->t2;
+    p->alarm_context.t3 = p->trapframe->t3;
+    p->alarm_context.t4 = p->trapframe->t4;
+    p->alarm_context.t5 = p->trapframe->t5;
+    p->alarm_context.t6 = p->trapframe->t6;
+    p->alarm_context.a0 = p->trapframe->a0;
+    p->alarm_context.a1 = p->trapframe->a1;
+    p->alarm_context.a2 = p->trapframe->a2;
+    p->alarm_context.a3 = p->trapframe->a3;
+    p->alarm_context.a4 = p->trapframe->a4;
+    p->alarm_context.a5 = p->trapframe->a5;
+    p->alarm_context.a6 = p->trapframe->a6;
+    p->alarm_context.a7 = p->trapframe->a7;
 
     p->trapframe->epc = p->alarm_handler;
   }

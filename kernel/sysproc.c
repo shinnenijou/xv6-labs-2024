@@ -95,7 +95,6 @@ sys_uptime(void)
   return xticks;
 }
 
-// TODO not implemented
 uint64
 sys_sigalarm(void)
 {
@@ -118,24 +117,29 @@ sys_sigalarm(void)
   return 0;
 }
 
-// TODO not implemented
 uint64
 sys_sigreturn(void)
 {
   struct proc *p = myproc();
-
-  if (p->alarm_interval == 0)
-  {
-    return -1;
-  }
-  
   p->alarm_elapse = 0;
-  p->trapframe->epc = p->alarm_epc;
 
-  // restore all registers
+  // restore caller-saved registers
   // see kernel/trap.c:useralarm()
-  uint64 n = sizeof(struct trapframe) - ((char *)&p->trapframe->ra - (char *)p->trapframe);
-  memmove(&p->trapframe->ra, &p->alarm_frame.ra, n);
+  p->trapframe->t0 = p->alarm_context.t0;
+  p->trapframe->t1 = p->alarm_context.t1;
+  p->trapframe->t2 = p->alarm_context.t2;
+  p->trapframe->t3 = p->alarm_context.t3;
+  p->trapframe->t4 = p->alarm_context.t4;
+  p->trapframe->t5 = p->alarm_context.t5;
+  p->trapframe->t6 = p->alarm_context.t6;
+  p->trapframe->a0 = p->alarm_context.a0;
+  p->trapframe->a1 = p->alarm_context.a1;
+  p->trapframe->a2 = p->alarm_context.a2;
+  p->trapframe->a3 = p->alarm_context.a3;
+  p->trapframe->a4 = p->alarm_context.a4;
+  p->trapframe->a5 = p->alarm_context.a5;
+  p->trapframe->a6 = p->alarm_context.a6;
+  p->trapframe->a7 = p->alarm_context.a7;
 
   return p->trapframe->a0;
 }
