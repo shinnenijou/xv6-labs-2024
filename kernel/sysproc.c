@@ -94,3 +94,17 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+// TODO not implemented
+uint64
+sys_sigalarm(void)
+{
+  return 0;
+}
+
+// TODO not implemented
+uint64
+sys_sigreturn(void)
+{
+  return 0;
+}
