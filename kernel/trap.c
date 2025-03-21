@@ -15,6 +15,7 @@ extern char trampoline[], uservec[], userret[];
 void kernelvec();
 
 extern int devintr();
+static int useralarm(struct proc*);
 
 void
 trapinit(void)
@@ -67,6 +68,11 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+
+    // timer interrupt
+    if (which_dev == 2){
+      useralarm(p);
+    }
   } else {
     printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
     printf("            sepc=0x%lx stval=0x%lx\n", r_sepc(), r_stval());
@@ -216,3 +222,19 @@ devintr()
   }
 }
 
+static int useralarm(struct proc* p){
+  if (p->alarm_interval == 0){
+    return 0;
+  }
+  
+  ++p->alarm_elapse;
+
+  if (p->alarm_elapse == p->alarm_interval){
+    p->trapframe->epc = p->alarm_handler;
+    p->alarm_elapse = 0;
+    p->alarm_interval = 0;
+    p->alarm_handler = 0;
+  }
+
+  return 0;
+}

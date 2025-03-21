@@ -99,6 +99,22 @@ sys_uptime(void)
 uint64
 sys_sigalarm(void)
 {
+  int ticks;
+  argint(0, &ticks);
+
+  if (ticks < 0){
+    return -1;
+  }
+
+  // handler might be zero in user space
+  uint64 handler;
+  argaddr(1, &handler);
+
+  struct proc *p = myproc();
+  p->alarm_elapse = 0;
+  p->alarm_interval = ticks;
+  p->alarm_handler = handler;
+
   return 0;
 }
 
