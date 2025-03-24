@@ -472,6 +472,9 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 int
 uvmcow(pagetable_t pagetable, uint64 va, uint64 npages)
 {
+  if (va >= MAXVA)
+    return -1;
+
   va = PGROUNDDOWN(va);
 
   for (uint64 a = va; a < va + npages * PGSIZE; a += PGSIZE){
