@@ -102,6 +102,48 @@ e1000_transmit(char *buf, int len)
   // a pointer so that it can be freed after send completes.
   //
 
+  acquire(&e1000_lock);
+
+  uint64 tail = regs[E1000_TDT];
+
+  // check spare tx buf
+  if ((tx_ring[tail].addr != 0) && (tx_ring[tail].status & E1000_TXD_STAT_DD) == 0){
+    release(&e1000_lock);
+    return -1;
+  }
+
+  // free old buf if transmit done
+  if (tx_ring[tail].addr){
+    kfree((void *)tx_ring[tail].addr);
+  }
+
+  // data to transmit
+  tx_ring[tail].addr = (uint64)buf;       
+
+  // length of data
+  tx_ring[tail].length = len;     
+
+  // Checksum Offset
+  tx_ring[tail].cso = 0;          
+
+  // Command field
+  // TODO may need to split user buf into several descriptors to allow sending large packet
+  tx_ring[tail].cmd = E1000_TXD_CMD_EOP | E1000_TXD_CMD_RS;
+
+  // Status field. initialize status
+  tx_ring[tail].status = 0;
+  
+  // Checksum Start. Used to to back out the bytes that should not be included in the TCP checksum.
+  // no need in this lab
+  tx_ring[tail].css = 0;          
+
+  // Special Field
+  tx_ring[tail].special = 0;
+
+  // write to tail register to inform new packet to hardware
+  regs[E1000_TDT] = (tail + 1) % TX_RING_SIZE;
+
+  release(&e1000_lock);
   
   return 0;
 }
@@ -114,8 +156,48 @@ e1000_recv(void)
   //
   // Check for packets that have arrived from the e1000
   // Create and deliver a buf for each packet (using net_rx()).
-  //
+  
+  uint64 packets[RX_RING_SIZE];
+  int lengths[RX_RING_SIZE];
+  uint64 count = 0;
 
+  acquire(&e1000_lock);
+
+  uint64 tail = regs[E1000_RDT];
+
+  while(1){
+    uint64 next_rx = (tail + 1) % RX_RING_SIZE;
+
+    if ((rx_ring[next_rx].status & E1000_RXD_STAT_DD) == 0){
+      break;
+    }
+
+    // recv buf not ready
+    void *buf = kalloc();
+
+    // no spare memory to deliver packet. wait for next intr
+    if (buf == 0){
+      break;
+    }
+
+    packets[count] = rx_ring[next_rx].addr;
+    lengths[count] = rx_ring[next_rx].length;
+    ++count;
+
+    rx_ring[next_rx].addr = (uint64)buf;
+    rx_ring[next_rx].length = 0;
+    rx_ring[next_rx].status = 0;
+    tail = next_rx;
+  }
+
+  regs[E1000_RDT] = tail;
+
+  release(&e1000_lock);
+
+  // deliver packets
+  for (uint64 i = 0; i < count; ++i){
+    net_rx((char *)packets[i], lengths[i]);
+  }
 }
 
 void
