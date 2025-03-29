@@ -135,39 +135,34 @@ sys_recv(void)
   uint64 src;
   argaddr(1, &src);
 
-  if (src == 0){
-    return -1;
-  }
-
   uint64 sport;
   argaddr(2, &sport);
-
-  if (src == 0){
-    return -1;
-  }
 
   uint64 usrbuf;
   argaddr(3, &usrbuf);
 
-  if (usrbuf == 0){
-    return -1;
-  }
-
-  int maxlen;
-  argint(4, &maxlen);
+  int len;
+  argint(4, &len);
 
   acquire(&netlock);
-  struct udp_queue *queue = udp_ports[dport];
 
   // port not bound
-  if (queue == 0){
-    release(&netlock);
-    return -1;
+  if (udp_ports[dport] == 0){
+    len = -1;
+    goto rel_lock;
   }
 
   // empty queue. wait for packets arriving
-  while (queue->tail == queue->head){
-    sleep(queue, &netlock);
+  while (udp_ports[dport] && udp_ports[dport]->tail == udp_ports[dport]->head){
+    sleep((void *)(uint64)dport, &netlock);
+  }
+
+  struct udp_queue *queue = udp_ports[dport];
+
+  // port not bound. check after sleep since other process may unbind this port
+  if (queue == 0){
+    len = -1;
+    goto rel_lock;
   }
 
   struct proc *p = myproc();
@@ -178,23 +173,33 @@ sys_recv(void)
 
   // source IP
   uint32 srcip = ntohl(iphdr->ip_src);
-  copyout(p->pagetable, src, (char*)&srcip, sizeof(srcip));
+  if (copyout(p->pagetable, src, (char*)&srcip, sizeof(srcip)) < 0){
+    len = -1;
+    goto rel_lock;
+  }
 
   // source port
   uint16 srcport = ntohs(udphdr->sport);
-  copyout(p->pagetable, sport, (char*)&srcport, sizeof(srcport));
+  if (copyout(p->pagetable, sport, (char*)&srcport, sizeof(srcport)) < 0){
+    len = -1;
+    goto rel_lock;
+  }
 
   // udp payload
-  uint64 len = ntohs(udphdr->ulen) - sizeof(struct udp);
-  len = len < maxlen ? len : maxlen;
+  uint64 payload_len = ntohs(udphdr->ulen) - sizeof(struct udp);
+  len = payload_len < len ? payload_len : len;
   char *payload = (char *)packet + sizeof(struct eth) + sizeof(struct ip) + sizeof (struct udp);
-  copyout(p->pagetable, usrbuf, payload, len);
+  if (copyout(p->pagetable, usrbuf, payload, len) < 0){
+    len = -1;
+    goto rel_lock; 
+  }
 
-  // dequeue
+  // dequeue packet
   kfree(packet);
   queue->packets[queue->head % UDP_QUEUE_SIZE] = 0;
   ++queue->head;
 
+rel_lock:
   release(&netlock);
   return len;
 }
@@ -357,7 +362,7 @@ ip_rx(char *buf, int len)
   ++queue->tail;
 
   release(&netlock);
-  wakeup(queue);
+  wakeup((void *)(uint64)port);
 
   return;
 drop:
