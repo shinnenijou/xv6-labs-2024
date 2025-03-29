@@ -133,4 +133,5 @@ struct udp_queue{
   volatile uint64 head;
   volatile uint64 tail;
   void *packets[UDP_QUEUE_SIZE];
+  int bound;
 };

@@ -19,7 +19,7 @@ static uint8 host_mac[ETHADDR_LEN] = { 0x52, 0x55, 0x0a, 0x00, 0x02, 0x02 };
 
 static struct spinlock netlock;
 
-static struct udp_queue *udp_ports[MAX_PORT];
+static struct udp_queue udp_ports[MAX_PORT];
 
 void
 netinit(void)
@@ -48,23 +48,15 @@ sys_bind(void)
   acquire(&netlock);
 
   // port is used
-  if (udp_ports[port] != 0){
-    release(&netlock);
-    return -1;
-  }
-
-  struct udp_queue *queue = (struct udp_queue *)kalloc();
-
-  // out of memory
-  if (queue == 0){
+  if (udp_ports[port].bound){
     release(&netlock);
     return -1;
   }
 
   // initialize queue
-  queue->head = 0;
-  queue->tail = 0;
-  udp_ports[port] = queue;
+  udp_ports[port].bound = 1;
+  udp_ports[port].head = 0;
+  udp_ports[port].tail = 0;
 
   release(&netlock);
 
@@ -88,16 +80,7 @@ sys_unbind(void)
   }
 
   acquire(&netlock);
-    
-  // not bound
-  if (udp_ports[port] == 0){
-    release(&netlock);
-    return -1;
-  }  
-
-  kfree(udp_ports[port]);
-  udp_ports[port] = 0;
-
+  udp_ports[port].bound = 0;
   release(&netlock);
 
   return 0;
@@ -147,20 +130,20 @@ sys_recv(void)
   acquire(&netlock);
 
   // port not bound
-  if (udp_ports[dport] == 0){
+  if (!udp_ports[dport].bound){
     len = -1;
     goto rel_lock;
   }
 
+  struct udp_queue *queue = &udp_ports[dport];
+
   // empty queue. wait for packets arriving
-  while (udp_ports[dport] && udp_ports[dport]->tail == udp_ports[dport]->head){
+  while (queue->bound && queue->tail == queue->head){
     sleep((void *)(uint64)dport, &netlock);
   }
 
-  struct udp_queue *queue = udp_ports[dport];
-
   // port not bound. check after sleep since other process may unbind this port
-  if (queue == 0){
+  if (!queue->bound){
     len = -1;
     goto rel_lock;
   }
@@ -344,10 +327,10 @@ ip_rx(char *buf, int len)
 
   acquire(&netlock);
 
-  struct udp_queue* queue = udp_ports[port];
+  struct udp_queue* queue = &udp_ports[port];
 
   // port not bound
-  if (queue == 0){
+  if (!queue->bound){
     release(&netlock);
     goto drop;
   }
