@@ -80,7 +80,17 @@ sys_unbind(void)
   }
 
   acquire(&netlock);
-  udp_ports[port].bound = 0;
+
+  struct udp_queue *queue = &udp_ports[port];
+
+  for (uint64 i = queue->head; i < queue->tail; ++i){
+    kfree(queue->packets[i % UDP_QUEUE_SIZE]);
+    queue->packets[i % UDP_QUEUE_SIZE] = 0;
+  }
+  queue->head = 0;
+  queue->tail = 0;
+  queue->bound = 0;
+
   release(&netlock);
 
   return 0;
@@ -128,12 +138,6 @@ sys_recv(void)
   argint(4, &len);
 
   acquire(&netlock);
-
-  // port not bound
-  if (!udp_ports[dport].bound){
-    len = -1;
-    goto rel_lock;
-  }
 
   struct udp_queue *queue = &udp_ports[dport];
 

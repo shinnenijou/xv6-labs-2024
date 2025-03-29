@@ -9,11 +9,9 @@
 
 #define TX_RING_SIZE 16
 static struct tx_desc tx_ring[TX_RING_SIZE] __attribute__((aligned(16)));
-static char *tx_bufs[TX_RING_SIZE];
 
 #define RX_RING_SIZE 16
 static struct rx_desc rx_ring[RX_RING_SIZE] __attribute__((aligned(16)));
-static char *rx_bufs[RX_RING_SIZE];
 
 // remember where the e1000's registers live.
 static volatile uint32 *regs;
@@ -42,7 +40,6 @@ e1000_init(uint32 *xregs)
   memset(tx_ring, 0, sizeof(tx_ring));
   for (i = 0; i < TX_RING_SIZE; i++) {
     tx_ring[i].status = E1000_TXD_STAT_DD;
-    tx_bufs[i] = 0;
   }
   regs[E1000_TDBAL] = (uint64) tx_ring;
   if(sizeof(tx_ring) % 128 != 0)
@@ -53,10 +50,10 @@ e1000_init(uint32 *xregs)
   // [E1000 14.4] Receive initialization
   memset(rx_ring, 0, sizeof(rx_ring));
   for (i = 0; i < RX_RING_SIZE; i++) {
-    rx_bufs[i] = kalloc();
-    if (!rx_bufs[i])
+    void *buf = kalloc();
+    if (!buf)
       panic("e1000");
-    rx_ring[i].addr = (uint64) rx_bufs[i];
+    rx_ring[i].addr = (uint64) buf;
   }
   regs[E1000_RDBAL] = (uint64) rx_ring;
   if(sizeof(rx_ring) % 128 != 0)
