@@ -125,3 +125,12 @@ struct dns_data {
   uint32 ttl;
   uint16 len;
 } __attribute__((packed));
+
+#define MAX_PORT ((1 << (sizeof(uint16) << 3)) - 1)
+#define UDP_QUEUE_SIZE 16
+
+struct udp_queue{
+  volatile uint64 head;
+  volatile uint64 tail;
+  void *packets[UDP_QUEUE_SIZE];
+};
