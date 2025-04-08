@@ -23,6 +23,7 @@ struct {
   struct run *freelist;
 } kmem[NCPU];
 
+static void kfreeto(struct run *r, int cpu);
 static char locknames[16 * NCPU];
 
 static char *lockname(int id)
@@ -63,10 +64,21 @@ kinit()
 void
 freerange(void *pa_start, void *pa_end)
 {
-  char *p;
-  p = (char*)PGROUNDUP((uint64)pa_start);
-  for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE)
-    kfree(p);
+  pa_start = (void*)PGROUNDUP((uint64)pa_start);
+  for(char *p = pa_start; p + PGSIZE <= (char*)pa_end; p += PGSIZE)
+  {
+    memset(p, 1, PGSIZE);
+    kfreeto((struct run*)p, (int)((p - (char *)pa_start)/PGSIZE) % NCPU);
+  }
+}
+
+void
+kfreeto(struct run *r, int cpu)
+{
+  acquire(&kmem[cpu].lock);
+  r->next = kmem[cpu].freelist;
+  kmem[cpu].freelist = r;
+  release(&kmem[cpu].lock);
 }
 
 // Free the page of physical memory pointed at by pa,
@@ -77,7 +89,6 @@ void
 kfree(void *pa)
 {
   struct run *r;
-  int cpu;
 
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
@@ -89,13 +100,7 @@ kfree(void *pa)
 
   // cpuid() is safe only when interrupts are turned off
   push_off();
-  cpu = cpuid();
-  acquire(&kmem[cpu].lock);
-
-  r->next = kmem[cpu].freelist;
-  kmem[cpu].freelist = r;
-
-  release(&kmem[cpu].lock);
+  kfreeto(r, cpuid());
   pop_off();
 }
 
