@@ -29,13 +29,13 @@ static char *lockname(int id)
 {
   char buf[16];
   uint64 i = 0;
+  char *name = &locknames[16 * id];
 
   do
   {
     buf[i++] = id % 10 + '0';
   } while ((id /= 10) > 0);
 
-  char *name = &locknames[16 * NCPU];
   memmove(name, "kmem_", sizeof("kmem_") - 1);
 
   for (uint64 j = 0; j < i; ++j)
