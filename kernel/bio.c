@@ -31,11 +31,11 @@ struct {
 
   // bucket locks
   // one lock for each bucket
-  struct spinlock bucketlocks[HASH_BUCKETS_NUM + 1];
+  struct spinlock bucketlocks[HASH_BUCKETS_NUM];
 
   // hash buckets for buffers
   // the last bucket contains unused buffer, and the other contain used buffer
-  struct buf buckets[HASH_BUCKETS_NUM + 1];
+  struct buf buckets[HASH_BUCKETS_NUM];
 } bcache;
 
 void
@@ -44,7 +44,7 @@ binit(void)
   initlock(&bcache.lock, "bcache");
 
   // init buckets
-  for (int i = 0; i <= HASH_BUCKETS_NUM; i++)
+  for (int i = 0; i < HASH_BUCKETS_NUM; i++)
   {
     initlock(&bcache.bucketlocks[i], "bcache");
     bcache.buckets[i].next = &bcache.buckets[i];
@@ -56,10 +56,10 @@ binit(void)
   {
     struct buf *b = &bcache.buf[i];
     initsleeplock(&b->lock, "buffer");
-    b->next = bcache.buckets[HASH_BUCKETS_NUM].next;
-    b->prev = &bcache.buckets[HASH_BUCKETS_NUM];
-    bcache.buckets[HASH_BUCKETS_NUM].next->prev = b;
-    bcache.buckets[HASH_BUCKETS_NUM].next = b;
+    b->next = bcache.buckets[0].next;
+    b->prev = &bcache.buckets[0];
+    bcache.buckets[0].next->prev = b;
+    bcache.buckets[0].next = b;
   }
 }
 
@@ -86,38 +86,61 @@ bget(uint dev, uint blockno)
     }
   }
 
-  release(&bcache.bucketlocks[hash]);
-
-  // Not cached.
-  // recycle from unused buffers
-  acquire(&bcache.bucketlocks[HASH_BUCKETS_NUM]);
-  b = bcache.buckets[HASH_BUCKETS_NUM].next;
-
-  if (b == &bcache.buckets[HASH_BUCKETS_NUM])
+  // No cached
+  // try to recycle from current bucket
+  for (b = bcache.buckets[hash].next; b != &bcache.buckets[hash]; b = b->next)
   {
-    panic("bget: no buffers");
+    if (b->refcnt == 0)
+    {
+      b->dev = dev;
+      b->blockno = blockno;
+      b->valid = 0;
+      b->refcnt = 1;
+      release(&bcache.bucketlocks[hash]);
+      acquiresleep(&b->lock);
+      return b;
+    }
   }
 
-  b->dev = dev;
-  b->blockno = blockno;
-  b->valid = 0;
-  b->refcnt = 1;
-
-  // remove from last bucket
-  bcache.buckets[HASH_BUCKETS_NUM].next = b->next;
-  bcache.buckets[HASH_BUCKETS_NUM].next->prev = &bcache.buckets[HASH_BUCKETS_NUM];
-  release(&bcache.bucketlocks[HASH_BUCKETS_NUM]);
-
-  // add into hashed bucket
-  acquire(&bcache.bucketlocks[hash]);
-  b->next = bcache.buckets[hash].next;
-  b->prev = &bcache.buckets[hash];
-  bcache.buckets[hash].next->prev = b;
-  bcache.buckets[hash].next = b;
   release(&bcache.bucketlocks[hash]);
 
-  acquiresleep(&b->lock);
-  return b;
+  // recycle from other buckets
+  // search from the next bucket to avoid potential contend
+  for (uint i = (hash + 1) % HASH_BUCKETS_NUM; i != hash; i = (i + 1) % HASH_BUCKETS_NUM)
+  {
+    acquire(&bcache.bucketlocks[i]);
+
+    for (b = bcache.buckets[i].next; b != &bcache.buckets[i]; b = b->next)
+    {
+      if (b->refcnt == 0)
+      {
+        b->dev = dev;
+        b->blockno = blockno;
+        b->valid = 0;
+        b->refcnt = 1;
+
+        // remove from current bucket
+        b->next->prev = b->prev;
+        b->prev->next = b->next;
+        release(&bcache.bucketlocks[i]);
+
+        // add into correct bucket
+        acquire(&bcache.bucketlocks[hash]);
+        b->next = bcache.buckets[hash].next;
+        b->prev = &bcache.buckets[hash];
+        bcache.buckets[hash].next->prev = b;
+        bcache.buckets[hash].next = b;
+        release(&bcache.bucketlocks[hash]);
+
+        acquiresleep(&b->lock);
+        return b;
+      }
+    }
+
+    release(&bcache.bucketlocks[i]);
+  }
+
+  panic("bget: no buffers");
 }
 
 // Return a locked buf with the contents of the indicated block.
@@ -153,25 +176,10 @@ brelse(struct buf *b)
 
   releasesleep(&b->lock);
 
+  uint hash = b->blockno % HASH_BUCKETS_NUM;
+  acquire(&bcache.bucketlocks[hash]);
   b->refcnt--;
-  if (b->refcnt == 0) {
-    // no one is waiting for it.
-    uint hash = b->blockno % HASH_BUCKETS_NUM;
-
-    // remove from current bucket
-    acquire(&bcache.bucketlocks[hash]);
-    b->next->prev = b->prev;
-    b->prev->next = b->next;
-    release(&bcache.bucketlocks[hash]);
-
-    // add into unused buffer bucket
-    acquire(&bcache.bucketlocks[HASH_BUCKETS_NUM]);
-    b->next = bcache.buckets[HASH_BUCKETS_NUM].next;
-    b->prev = &bcache.buckets[HASH_BUCKETS_NUM];
-    bcache.buckets[HASH_BUCKETS_NUM].next->prev = b;
-    bcache.buckets[HASH_BUCKETS_NUM].next = b;
-    release(&bcache.bucketlocks[HASH_BUCKETS_NUM]);
-  }
+  release(&bcache.bucketlocks[hash]);
 }
 
 void
