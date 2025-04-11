@@ -455,13 +455,11 @@ bmap(struct inode *ip, uint bn)
     if ((addr = a[bn % NINDIRECT]) == 0)
     {
       addr = balloc(ip->dev);
-      if (addr == 0)
+      if (addr)
       {
-        brelse(bp);
-        return 0;
+        a[bn % NINDIRECT] = addr;
+        log_write(bp);
       }
-      a[bn % NINDIRECT] = addr;
-      log_write(bp);
     }
     brelse(bp);
     return addr;
@@ -501,9 +499,9 @@ itrunc(struct inode *ip)
   }
 
   // doubly-indirect blocks
-  if (ip->addrs[NDIRECT + 1])
+  if (ip->addrs[NDIRECT + NINDIRECTADDR])
   {
-    bp = bread(ip->dev, ip->addrs[NDIRECT + 1]);
+    bp = bread(ip->dev, ip->addrs[NDIRECT + NINDIRECTADDR]);
     a = (uint*)bp->data;
 
     for (i = 0; i < NINDIRECT; i++)
@@ -525,8 +523,8 @@ itrunc(struct inode *ip)
     }
 
     brelse(bp);
-    bfree(ip->dev, ip->addrs[NDIRECT + 1]);
-    ip->addrs[NDIRECT + 1] = 0;
+    bfree(ip->dev, ip->addrs[NDIRECT + NINDIRECTADDR]);
+    ip->addrs[NDIRECT + NINDIRECTADDR] = 0;
   }
 
   ip->size = 0;
