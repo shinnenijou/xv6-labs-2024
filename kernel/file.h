@@ -26,7 +26,7 @@ struct inode {
   short minor;
   short nlink;
   uint size;
-  uint addrs[NDIRECT+NDIRECT+NINDIRECTADDR+NDINDIRECTADDR];
+  uint addrs[NDIRECT+NINDIRECTADDR+NDINDIRECTADDR];
 };
 
 // map major device number to device functions.
