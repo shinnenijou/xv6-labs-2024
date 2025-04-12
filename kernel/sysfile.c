@@ -316,6 +316,7 @@ sys_open(void)
 
   begin_op();
 
+  // create or search for inode
   if(omode & O_CREATE){
     ip = create(path, T_FILE, 0, 0);
     if(ip == 0){
@@ -333,6 +334,47 @@ sys_open(void)
       end_op();
       return -1;
     }
+  }
+
+  int depth = 0;
+
+  // recursively follow the link if opened file is a symbolic link
+  // each iteration maintains the invariant that inode is locked
+  while (!(omode & O_NOFOLLOW) && ip->type == T_SYMLINK && depth < 10)
+  {
+    char target[MAXPATH];
+
+    if (readi(ip, 0, (uint64)target, 0, MAXPATH) < 0)
+    {
+      iunlockput(ip);
+      end_op();
+      return -1;
+    }
+
+    iunlockput(ip);
+
+    if ((ip = namei(target)) == 0)
+    {
+      end_op();
+      return -1;
+    }
+
+    ilock(ip);
+    if(ip->type == T_DIR && omode != O_RDONLY){
+      iunlockput(ip);
+      end_op();
+      return -1;
+    }
+
+    ++depth;
+  }
+
+  // fails when met circular reference
+  if (depth >= 10)
+  {
+    iunlockput(ip);
+    end_op();
+    return -1;
   }
 
   if(ip->type == T_DEVICE && (ip->major < 0 || ip->major >= NDEV)){
@@ -504,9 +546,34 @@ sys_pipe(void)
   return 0;
 }
 
-// TODO not implemented
 uint64
 sys_symlink(void)
 {
-  return -1;
+  char path[MAXPATH];
+  char target[MAXPATH];
+
+  if (argstr(0, target, MAXPATH) < 0 || argstr(1, path, MAXPATH) < 0)
+  {
+    return -1;
+  }
+
+  struct inode *ip;
+
+  begin_op();
+
+  if((ip = create(path, T_SYMLINK, 0, 0)) == 0){
+    end_op();
+    return -1;
+  }
+
+  if (writei(ip, 0, (uint64)target, 0, strlen(target)) < 0)
+  {
+    end_op();
+    return -1;
+  }
+
+  iunlockput(ip);
+  end_op();
+
+  return 0;
 }
