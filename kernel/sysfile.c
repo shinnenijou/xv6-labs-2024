@@ -503,3 +503,10 @@ sys_pipe(void)
   }
   return 0;
 }
+
+// TODO not implemented
+uint64
+sys_symlink(void)
+{
+  return -1;
+}
