@@ -44,6 +44,7 @@ struct vma
   uint64 len;
   struct file *ofile;
   uint8 prot;
+  uint8 flags;
 };
 
 #define CONSOLE 1

@@ -559,6 +559,7 @@ sys_mmap(void)
     a->base_va = VMA(i);
     a->len = PGROUNDUP(len);
     a->prot = prot;
+    a->flags = flags;
 
     filedup(f);
     a->ofile = f;
@@ -570,7 +571,6 @@ sys_mmap(void)
     return -1;
   }
 
-  printf("mmap va -> %p\n", (void*)a->base_va);
 
   return a->base_va;
 }
