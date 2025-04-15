@@ -294,11 +294,16 @@ vmaunload(struct vma* a, pagetable_t pagetable, uint64 va_begin, uint64 va_end)
       // compare with file end
       uint64 n = va + PGSIZE < file_end ? PGSIZE : file_end - va;
 
-      begin_op();
-      ilock(a->ofile->ip);
-      n = writei(a->ofile->ip, 1, va, va - a->base_va, n);
-      iunlock(a->ofile->ip);
-      end_op();
+      pte_t *pte = walk(pagetable, va, 0);
+
+      if (pte && *pte & PTE_V && *pte & PTE_U && *pte & PTE_D)
+      {
+        begin_op();
+        ilock(a->ofile->ip);
+        n = writei(a->ofile->ip, 1, va, va - a->base_va, n);
+        iunlock(a->ofile->ip);
+        end_op();
+      }
 
       wn += n;
     }
