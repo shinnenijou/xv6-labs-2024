@@ -505,8 +505,6 @@ sys_pipe(void)
   return 0;
 }
 
-// TODO not implemented
-// void *mmap(void *addr, size_t len, int prot, int flags, int fd, off_t offset);
 uint64
 sys_mmap(void)
 {
@@ -567,9 +565,10 @@ sys_mmap(void)
     }
 
     a->base_va = VMA(i);
-    a->len = PGROUNDUP(len);
+    a->len = len;
     a->prot = prot;
     a->flags = flags;
+    a->offset = 0;
 
     filedup(f);
     a->ofile = f;
@@ -581,7 +580,6 @@ sys_mmap(void)
     return -1;
   }
 
-
   return a->base_va;
 }
 
@@ -590,5 +588,71 @@ sys_mmap(void)
 uint64
 sys_munmap(void)
 {
-  return -1;
+  // assume that it will either unmap at the start, or at the end, or the whole region
+  uint64 addr;
+  argaddr(0, &addr);
+
+  size_t len;
+  argaddr(1, &len);
+
+  struct proc *p = myproc();
+  struct vma *a = 0;
+
+  for (uint64 i = 0; i < NVMA; ++i)
+  {
+    if (p->vma[i] && addr >= p->vma[i]->base_va && addr < p->vma[i]->base_va + p->vma[i]->len)
+    {
+      a = p->vma[i];
+      break;
+    }
+  }
+
+  if (a == 0)
+    return -1;
+
+  // validate addr and len
+  len = addr + len > a->base_va + a->len ? a->base_va + a->len - addr : len;
+
+  // Unix munmap() function removes any mappings for those entire pages containing any part of the address [addr + addr + len)
+  uint64 va_begin = PGROUNDDOWN(addr);
+  uint64 va_end = PGROUNDUP(addr + len);
+
+  // write back if vma is shared
+  if (a->flags & MAP_SHARED)
+  {
+    ilock(a->ofile->ip);
+    writei(a->ofile->ip, 1, addr, a->offset + addr - a->base_va, len);
+    iunlock(a->ofile->ip);
+  }
+
+  uvmunmap(p->pagetable, va_begin, (va_end - va_begin)/PGSIZE, 1);
+
+  // update vma struct
+  a->base_va += va_begin == a->base_va ? len : 0;
+  a->len -= len;
+  a->offset += va_begin == a->base_va ? len : 0;
+
+  // whole file is unmapped, remove vma and ref count to file
+  if (a->len == 0)
+  {
+    fileclose(a->ofile);
+    a->ofile = 0;
+    a->base_va = 0;
+    a->len = 0;
+    a->flags = 0;
+    a->prot = 0;
+
+    for (uint64 i = 0; i < NVMA; ++i)
+    {
+      if (p->vma[i] == a)
+      {
+        p->vma[i] = 0;
+        break;
+      }
+    }
+
+    vmafree(a);
+  }
+
+  return 0;
 }

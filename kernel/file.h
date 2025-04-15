@@ -41,7 +41,8 @@ extern struct devsw devsw[];
 struct vma
 {
   uint64 base_va;
-  uint64 len;
+  uint64 offset;
+  uint64 len;         // mapped len
   struct file *ofile;
   uint8 prot;
   uint8 flags;
