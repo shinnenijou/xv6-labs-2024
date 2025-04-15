@@ -583,8 +583,6 @@ sys_mmap(void)
   return a->base_va;
 }
 
-// TODO not implemented
-// int munmap(void *addr, size_t len);
 uint64
 sys_munmap(void)
 {
@@ -612,38 +610,7 @@ sys_munmap(void)
 
   // validate addr and len
   len = addr + len > a->base_va + a->len ? a->base_va + a->len - addr : len;
-
-  // Unix munmap() function removes any mappings for those entire pages containing any part of the address [addr + addr + len)
-  uint64 va_begin = PGROUNDDOWN(addr);
-  uint64 va_end = PGROUNDUP(addr + len);
-
-  // write back if vma is shared
-  if (a->flags & MAP_SHARED)
-  {
-    uint64 max = ((MAXOPBLOCKS-1-1-2) / 2) * BSIZE;
-    uint64 rest = len;
-    uint64 offset = a->offset + addr - a->base_va;
-
-    while (rest > 0)
-    {
-      uint64 n = rest > max ? max : rest;
-      begin_op();
-      ilock(a->ofile->ip);
-      n = writei(a->ofile->ip, 1, addr + len - rest, offset, n);
-      iunlock(a->ofile->ip);
-      end_op();
-
-      rest -= n;
-      offset += n;
-    }
-  }
-
-  uvmunmap(p->pagetable, va_begin, (va_end - va_begin)/PGSIZE, 1);
-
-  // update vma struct
-  a->base_va += va_begin == a->base_va ? len : 0;
-  a->len -= len;
-  a->offset += va_begin == a->base_va ? len : 0;
+  vmaunload(a, p->pagetable, addr, len);
 
   // whole file is unmapped, remove vma and ref count to file
   if (a->len == 0)

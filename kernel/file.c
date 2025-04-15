@@ -269,3 +269,40 @@ vmaload(uint64 va, uint64 prot)
 
   return -1;
 }
+
+void
+vmaunload(struct vma* a, pagetable_t pagetable, uint64 va, uint64 len)
+{
+  // Unix munmap() function removes any mappings for those entire pages containing any part of the address [addr + addr + len)
+  uint64 va_begin = PGROUNDDOWN(va);
+  uint64 va_end = PGROUNDUP(va + len);
+
+  // write back if vma is shared
+  if (a->flags & MAP_SHARED)
+  {
+    uint64 max = ((MAXOPBLOCKS-1-1-2) / 2) * BSIZE;
+    uint64 rest = len;
+    uint64 offset = a->offset + va - a->base_va;
+
+    while (rest > 0)
+    {
+      uint64 n = rest > max ? max : rest;
+      begin_op();
+      ilock(a->ofile->ip);
+      n = writei(a->ofile->ip, 1, va + len - rest, offset, n);
+      iunlock(a->ofile->ip);
+      end_op();
+
+      rest -= n;
+      offset += n;
+    }
+  }
+
+  uvmunmap(pagetable, va_begin, (va_end - va_begin)/PGSIZE, 1);
+
+  // update vma struct
+  a->base_va += va_begin == a->base_va ? len : 0;
+  a->len -= len;
+  a->offset += va_begin == a->base_va ? len : 0;
+
+}
