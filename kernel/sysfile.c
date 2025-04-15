@@ -549,36 +549,27 @@ sys_mmap(void)
 
   struct proc *p = myproc();
   struct vma *a = 0;
+  uint64 i = 0;
 
-  for (uint64 i = 0; i < NVMA; ++i)
-  {
-    if (p->vma[i] != 0)
-    {
-      continue;
-    }
+  while (i < NVMA && p->vma[i] != 0) ++i;
 
-    a = vmaalloc();
-
-    if (a == 0)
-    {
-      break;
-    }
-
-    a->base_va = VMA(i);
-    a->len = len;
-    a->prot = prot;
-    a->flags = flags;
-    a->offset = 0;
-
-    filedup(f);
-    a->ofile = f;
-    p->vma[i] = a;
-  }
-
-  if (a == 0)
-  {
+  // process mapped file exceeds maximum number
+  if (i == NVMA)
     return -1;
-  }
+
+  // global mapped file exceeds maximum number
+  if ((a = vmaalloc()) == 0)
+    return -1;
+
+  a->base_va = VMA(i);
+  a->len = len;
+  a->prot = prot;
+  a->flags = flags;
+  a->offset = 0;
+
+  filedup(f);
+  a->ofile = f;
+  p->vma[i] = a;
 
   return a->base_va;
 }
@@ -594,23 +585,24 @@ sys_munmap(void)
   argaddr(1, &len);
 
   struct proc *p = myproc();
-  struct vma *a = 0;
+  uint64 i = 0;
 
-  for (uint64 i = 0; i < NVMA; ++i)
+  for (i = 0; i < NVMA; ++i)
   {
     if (p->vma[i] && addr >= p->vma[i]->base_va && addr < p->vma[i]->base_va + p->vma[i]->len)
     {
-      a = p->vma[i];
       break;
     }
   }
 
-  if (a == 0)
+  if (i == NVMA)
     return -1;
 
+  struct vma *a = p->vma[i];
+
   // validate addr and len
-  len = addr + len > a->base_va + a->len ? a->base_va + a->len - addr : len;
-  vmaunload(a, p->pagetable, addr, len);
+  // Unix munmap() function removes entire pages containing any part of the address [addr + addr + len)
+  vmaunload(a, p->pagetable, PGROUNDDOWN(addr), PGROUNDUP(addr + len > a->base_va + a->len ? a->base_va + a->len : addr + len));
 
   // whole file is unmapped, remove vma and ref count to file
   if (a->len == 0)
@@ -621,17 +613,8 @@ sys_munmap(void)
     a->len = 0;
     a->flags = 0;
     a->prot = 0;
-
-    for (uint64 i = 0; i < NVMA; ++i)
-    {
-      if (p->vma[i] == a)
-      {
-        p->vma[i] = 0;
-        break;
-      }
-    }
-
     vmafree(a);
+    p->vma[i] = 0;
   }
 
   return 0;

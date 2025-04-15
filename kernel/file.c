@@ -271,38 +271,46 @@ vmaload(uint64 va, uint64 prot)
 }
 
 void
-vmaunload(struct vma* a, pagetable_t pagetable, uint64 va, uint64 len)
+vmaunload(struct vma* a, pagetable_t pagetable, uint64 va_begin, uint64 va_end)
 {
-  // Unix munmap() function removes any mappings for those entire pages containing any part of the address [addr + addr + len)
-  uint64 va_begin = PGROUNDDOWN(va);
-  uint64 va_end = PGROUNDUP(va + len);
+  if (va_begin % PGSIZE != 0)
+    panic("vmaunload: va_begin not align");
+
+  if (va_end % PGSIZE != 0)
+    panic("vmaunload: va_end not align");
+
+  uint64 rn = 0;
 
   // write back if vma is shared
   if (a->flags & MAP_SHARED)
   {
-    uint64 max = ((MAXOPBLOCKS-1-1-2) / 2) * BSIZE;
-    uint64 rest = len;
-    uint64 offset = a->offset + va - a->base_va;
+    uint64 file_end = a->base_va + a->offset + a->len;
 
-    while (rest > 0)
+    for (uint64 va = va_begin; va < va_end; va += PGSIZE)
     {
-      uint64 n = rest > max ? max : rest;
+      // compare with file end
+      uint64 n = va + PGSIZE < file_end ? PGSIZE : file_end - va;
+
       begin_op();
       ilock(a->ofile->ip);
-      n = writei(a->ofile->ip, 1, va + len - rest, offset, n);
+      n = writei(a->ofile->ip, 1, va, va - a->base_va, n);
       iunlock(a->ofile->ip);
       end_op();
 
-      rest -= n;
-      offset += n;
+      rn += n;
     }
   }
 
-  uvmunmap(pagetable, va_begin, (va_end - va_begin)/PGSIZE, 1);
+  for (uint64 va = va_begin; va < va_end; va += PGSIZE)
+  {
+    if (walkaddr(pagetable, va))
+    {
+      uvmunmap(pagetable, va, 1, 1);
+    }
+  }
 
   // update vma struct
-  a->base_va += va_begin == a->base_va ? len : 0;
-  a->len -= len;
-  a->offset += va_begin == a->base_va ? len : 0;
-
+  a->base_va += va_begin == a->base_va ? rn : 0;
+  a->len -= rn;
+  a->offset += va_begin == a->base_va ? rn : 0;
 }

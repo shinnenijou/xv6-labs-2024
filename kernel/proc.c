@@ -3,6 +3,9 @@
 #include "memlayout.h"
 #include "riscv.h"
 #include "spinlock.h"
+#include "sleeplock.h"
+#include "fs.h"
+#include "file.h"
 #include "proc.h"
 #include "defs.h"
 
@@ -350,6 +353,20 @@ exit(int status)
 
   if(p == initproc)
     panic("init exiting");
+
+  // unmap all memory-mapped file
+  for (uint64 i = 0; i < NVMA; ++i)
+  {
+    struct vma* a = p->vma[i];
+
+    if (a)
+    {
+      vmaunload(a, p->pagetable, PGROUNDDOWN(a->base_va + a->offset), PGROUNDUP(a->base_va + a->offset + a->len));
+      fileclose(a->ofile);
+      vmafree(a);
+      p->vma[i] = 0;
+    }
+  }
 
   // Close all open files.
   for(int fd = 0; fd < NOFILE; fd++){

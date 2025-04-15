@@ -40,8 +40,8 @@ extern struct devsw devsw[];
 // VMA used for memory-mapped file
 struct vma
 {
-  uint64 base_va;
-  uint64 offset;
+  uint64 base_va;     // origin addr of virtual memory area, aligned to PGSIZE
+  uint64 offset;      // user may unmap part of VMA, offset indicates from which addr is valid(i.e., mapped) after unmapping start of area
   uint64 len;         // mapped len
   struct file *ofile;
   uint8 prot;
