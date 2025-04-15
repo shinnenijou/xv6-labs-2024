@@ -305,11 +305,24 @@ fork(void)
   // Cause fork to return 0 in the child.
   np->trapframe->a0 = 0;
 
+
   // increment reference counts on open file descriptors.
   for(i = 0; i < NOFILE; i++)
     if(p->ofile[i])
       np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
+
+
+  // copy vma and increment mapped file
+  for (i = 0; i < NVMA; ++i)
+  {
+    if (p->vma[i] > 0)
+    {
+      np->vma[i] = vmaalloc();
+      memmove(np->vma[i], p->vma[i], sizeof(struct vma));
+      np->vma[i]->ofile = filedup(p->vma[i]->ofile);
+    }
+  }
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 
