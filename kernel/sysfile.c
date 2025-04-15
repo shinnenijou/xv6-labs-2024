@@ -600,8 +600,9 @@ sys_munmap(void)
     }
   }
 
+  // If there are no mappings in the specified address range, then munmap() has no effect.
   if (i == NVMA)
-    return -1;
+    return 0;
 
   struct vma *a = p->vma[i];
 
