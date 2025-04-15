@@ -620,9 +620,11 @@ sys_munmap(void)
   // write back if vma is shared
   if (a->flags & MAP_SHARED)
   {
+    begin_op();
     ilock(a->ofile->ip);
     writei(a->ofile->ip, 1, addr, a->offset + addr - a->base_va, len);
     iunlock(a->ofile->ip);
+    end_op();
   }
 
   uvmunmap(p->pagetable, va_begin, (va_end - va_begin)/PGSIZE, 1);
