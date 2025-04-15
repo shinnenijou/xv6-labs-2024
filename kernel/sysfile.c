@@ -537,10 +537,10 @@ sys_mmap(void)
   }
 
   // check file permissions
-  if ((prot & PROT_WRITE) > 0 && !f->writable)
+  if ((flags & MAP_SHARED) > 0 && (prot & PROT_WRITE) > 0 && !f->writable)
     return -1;
 
-  if ((prot & PROT_READ) > 0 && !f->readable)
+  if ((flags & MAP_SHARED) > 0 && (prot & PROT_READ) > 0 && !f->readable)
     return -1;
 
   // assume offset is zero
