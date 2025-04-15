@@ -66,9 +66,9 @@ usertrap(void)
     intr_on();
 
     syscall();
-  } else if(r_scause() == 0xd && vmaload(r_stval(), PROT_READ) >= 0){
+  } else if(r_scause() == 0xd && vmaload(r_stval(), PROT_READ) == 0){
     // load page fault, ok
-  } else if(r_scause() == 0xf && vmaload(r_stval(), PROT_WRITE) >= 0){
+  } else if(r_scause() == 0xf && vmaload(r_stval(), PROT_WRITE) == 0){
     // store page fault, ok
   } else if((which_dev = devintr()) != 0){
     // ok

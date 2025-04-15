@@ -230,44 +230,47 @@ vmafree(struct vma* a)
 
 
 int
-vmaload(uint64 va, uint64 prot)
+vmaload(uint64 addr, uint64 prot)
 {
   struct proc *p = myproc();
-  va = PGROUNDDOWN(va);
+  struct vma *a = 0;
 
+  // find accessed VMA
   for (uint64 i = 0; i < NVMA; ++i)
   {
-    if (p->vma[i] == 0)
-      continue;
-
-    struct vma* a = p->vma[i];
-
-    if (va < a->base_va || va >= a->base_va + a->len)
-      continue;
-
-    if ((a->prot & prot) == 0)
-      break;
-
-    uint64 pa = (uint64)kalloc();
-    memset((void*)pa, 0, PGSIZE);
-
-    struct inode *ip = a->ofile->ip;
-    ilock(ip);
-    readi(ip, 0, pa, va - a->base_va, PGSIZE);
-    iunlock(ip);
-
-    int perm = PTE_U | (a->prot & PROT_READ ? PTE_R : 0) | (a->prot & PROT_WRITE ? PTE_W : 0);
-
-    if (mappages(p->pagetable, va, PGSIZE, pa, perm) < 0)
+    if (p->vma[i] && addr >= p->vma[i]->base_va + p->vma[i]->offset && addr < p->vma[i]->base_va + p->vma[i]->offset + p->vma[i]->len)
     {
-      kfree((void*)pa);
-      return -1;
+      a = p->vma[i];
+      break;
     }
-
-    return 0;
   }
 
-  return -1;
+  if (a == 0)
+    return -1;
+
+  if ((a->prot & prot) == 0)
+    return -1;
+
+  uint64 va = PGROUNDDOWN(addr);
+  uint64 pa = (uint64)kalloc();
+
+  if (pa == 0)
+    return -1;
+
+  memset((void*)pa, 0, PGSIZE);
+  ilock(a->ofile->ip);
+  readi(a->ofile->ip, 0, pa, va - a->base_va, PGSIZE);
+  iunlock(a->ofile->ip);
+
+  int perm = PTE_U | (a->prot & PROT_READ ? PTE_R : 0) | (a->prot & PROT_WRITE ? PTE_W : 0);
+
+  if (mappages(p->pagetable, va, PGSIZE, pa, perm) < 0)
+  {
+    kfree((void*)pa);
+    return -1;
+  }
+
+  return 0;
 }
 
 void
