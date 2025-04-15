@@ -282,7 +282,7 @@ vmaunload(struct vma* a, pagetable_t pagetable, uint64 va_begin, uint64 va_end)
   if (va_end % PGSIZE != 0)
     panic("vmaunload: va_end not align");
 
-  uint64 rn = 0;
+  uint64 wn = 0;
 
   // write back if vma is shared
   if (a->flags & MAP_SHARED)
@@ -300,7 +300,7 @@ vmaunload(struct vma* a, pagetable_t pagetable, uint64 va_begin, uint64 va_end)
       iunlock(a->ofile->ip);
       end_op();
 
-      rn += n;
+      wn += n;
     }
   }
 
@@ -313,7 +313,6 @@ vmaunload(struct vma* a, pagetable_t pagetable, uint64 va_begin, uint64 va_end)
   }
 
   // update vma struct
-  a->base_va += va_begin == a->base_va ? rn : 0;
-  a->len -= rn;
-  a->offset += va_begin == a->base_va ? rn : 0;
+  a->len -= wn;
+  a->offset += va_begin == (a->base_va + a->offset) ? wn : 0;
 }

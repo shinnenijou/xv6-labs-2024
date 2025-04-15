@@ -594,7 +594,7 @@ sys_munmap(void)
 
   for (i = 0; i < NVMA; ++i)
   {
-    if (p->vma[i] && addr >= p->vma[i]->base_va && addr < p->vma[i]->base_va + p->vma[i]->len)
+    if (p->vma[i] && addr >= p->vma[i]->base_va + p->vma[i]->offset && addr < p->vma[i]->base_va + p->vma[i]->offset + p->vma[i]->len)
     {
       break;
     }
@@ -608,7 +608,8 @@ sys_munmap(void)
 
   // validate addr and len
   // Unix munmap() function removes entire pages containing any part of the address [addr + addr + len)
-  vmaunload(a, p->pagetable, PGROUNDDOWN(addr), PGROUNDUP(addr + len > a->base_va + a->len ? a->base_va + a->len : addr + len));
+  uint64 file_end = a->base_va + a->offset + a->len;
+  vmaunload(a, p->pagetable, PGROUNDDOWN(addr), PGROUNDUP(addr + len > file_end ? file_end : addr + len));
 
   // whole file is unmapped, remove vma and ref count to file
   if (a->len == 0)
