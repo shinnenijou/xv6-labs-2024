@@ -503,3 +503,17 @@ sys_pipe(void)
   }
   return 0;
 }
+
+// TODO not implemented
+uint64
+sys_mmap(void)
+{
+  return -1;
+}
+
+// TODO not implemented
+uint64
+sys_munmap(void)
+{
+  return -1;
+}
