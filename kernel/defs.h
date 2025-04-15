@@ -39,6 +39,7 @@ int             filestat(struct file*, uint64 addr);
 int             filewrite(struct file*, uint64, int n);
 struct vma*     vmaalloc(void);
 void            vmafree(struct vma*);
+int             vmaload(uint64, uint64);
 
 // fs.c
 void            fsinit(int);

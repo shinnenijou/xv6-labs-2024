@@ -12,6 +12,7 @@
 #include "file.h"
 #include "stat.h"
 #include "proc.h"
+#include "fcntl.h"
 
 struct devsw devsw[NDEV];
 struct {
@@ -225,4 +226,46 @@ vmafree(struct vma* a)
   }
 
   release(&vmatable.lock);
+}
+
+
+int
+vmaload(uint64 va, uint64 prot)
+{
+  struct proc *p = myproc();
+  va = PGROUNDDOWN(va);
+
+  for (uint64 i = 0; i < NVMA; ++i)
+  {
+    if (p->vma[i] == 0)
+      continue;
+
+    struct vma* a = p->vma[i];
+
+    if (va < a->base_va || va >= a->base_va + a->len)
+      continue;
+
+    if ((a->prot & prot) == 0)
+      break;
+
+    uint64 pa = (uint64)kalloc();
+    memset((void*)pa, 0, PGSIZE);
+
+    struct inode *ip = a->ofile->ip;
+    ilock(ip);
+    readi(ip, 0, pa, va - a->base_va, PGSIZE);
+    iunlock(ip);
+
+    int perm = PTE_U | (a->prot & PROT_READ ? PTE_R : 0) | (a->prot & PROT_WRITE ? PTE_W : 0);
+
+    if (mappages(p->pagetable, va, PGSIZE, pa, perm) < 0)
+    {
+      kfree((void*)pa);
+      return -1;
+    }
+
+    return 0;
+  }
+
+  return -1;
 }
