@@ -561,6 +561,11 @@ sys_mmap(void)
   if ((a = vmaalloc()) == 0)
     return -1;
 
+  // fix len according to file's real size
+  ilock(f->ip);
+  len = len > f->ip->size ? f->ip->size : len;
+  iunlock(f->ip);
+
   a->base_va = VMA(i);
   a->len = len;
   a->prot = prot;
