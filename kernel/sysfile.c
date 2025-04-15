@@ -15,6 +15,7 @@
 #include "sleeplock.h"
 #include "file.h"
 #include "fcntl.h"
+#include "memlayout.h"
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -505,13 +506,77 @@ sys_pipe(void)
 }
 
 // TODO not implemented
+// void *mmap(void *addr, size_t len, int prot, int flags, int fd, off_t offset);
 uint64
 sys_mmap(void)
 {
-  return -1;
+  // assume that addr will always be zero
+  uint64 addr;
+  argaddr(0, &addr);
+
+  size_t len;
+  argaddr(1, &len);
+
+  // assume that prot is PROT_READ or PROT_WRITE or both
+  int prot;
+  argint(2, &prot);
+
+  // flags will be either MAP_SHARED, or MAP_PRIVATE
+  int flags;
+  argint(3, &flags);
+
+  int fd = -1;
+  struct file* f = 0;
+  argfd(4, &fd, &f);
+
+  // file not opened
+  if (f == 0)
+  {
+    return -1;
+  }
+
+  // assume offset is zero
+  off_t offset;
+  argaddr(5, (uint64*)&offset);
+
+  struct proc *p = myproc();
+  struct vma *a = 0;
+
+  for (uint64 i = 0; i < NVMA; ++i)
+  {
+    if (p->vma[i] != 0)
+    {
+      continue;
+    }
+
+    a = vmaalloc();
+
+    if (a == 0)
+    {
+      break;
+    }
+
+    a->base_va = VMA(i);
+    a->len = PGROUNDUP(len);
+    a->prot = prot;
+
+    filedup(f);
+    a->ofile = f;
+    p->vma[i] = a;
+  }
+
+  if (a == 0)
+  {
+    return -1;
+  }
+
+  printf("mmap va -> %p\n", (void*)a->base_va);
+
+  return a->base_va;
 }
 
 // TODO not implemented
+// int munmap(void *addr, size_t len);
 uint64
 sys_munmap(void)
 {

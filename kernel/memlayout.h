@@ -54,6 +54,13 @@
 //   fixed-size stack
 //   expandable heap
 //   ...
+//   memory-mapped vma
+//   ...
 //   TRAPFRAME (p->trapframe, used by the trampoline)
 //   TRAMPOLINE (the same page as in the kernel)
 #define TRAPFRAME (TRAMPOLINE - PGSIZE)
+
+// memory-mapped vma, size depends on max file size of file system
+// should be consistent with MAXFILE * BSIZE in fs.h
+#define VMASIZE ((12 + 1024/sizeof(uint)) * 1024)
+#define VMA(i) (TRAPFRAME - (i + 1) * VMASIZE)

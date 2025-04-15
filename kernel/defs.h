@@ -37,6 +37,8 @@ void            fileinit(void);
 int             fileread(struct file*, uint64, int n);
 int             filestat(struct file*, uint64 addr);
 int             filewrite(struct file*, uint64, int n);
+struct vma*     vmaalloc(void);
+void            vmafree(struct vma*);
 
 // fs.c
 void            fsinit(int);

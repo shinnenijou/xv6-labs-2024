@@ -19,6 +19,13 @@ struct {
   struct file file[NFILE];
 } ftable;
 
+struct
+{
+  struct spinlock lock;
+  uint64 ref[NVMA];
+  struct vma vma[NVMA];
+} vmatable;
+
 void
 fileinit(void)
 {
@@ -180,3 +187,42 @@ filewrite(struct file *f, uint64 addr, int n)
   return ret;
 }
 
+// Allocate a vma struct
+struct vma*
+vmaalloc()
+{
+  struct vma* a = 0;
+
+  acquire(&vmatable.lock);
+
+  for (uint64 i = 0; i < NVMA; i++)
+  {
+    if (vmatable.ref[i] == 0)
+    {
+      vmatable.ref[i] = 1;
+      a = &vmatable.vma[i];
+      break;
+    }
+  }
+
+  release(&vmatable.lock);
+  return a;
+}
+
+// Free an allocated vma struct
+void
+vmafree(struct vma* a)
+{
+  acquire(&vmatable.lock);
+
+  for (uint64 i = 0; i < NVMA; ++i)
+  {
+    if (a == &vmatable.vma[i])
+    {
+      vmatable.ref[i]--;
+      break;
+    }
+  }
+
+  release(&vmatable.lock);
+}

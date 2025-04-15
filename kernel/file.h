@@ -37,4 +37,13 @@ struct devsw {
 
 extern struct devsw devsw[];
 
+// VMA used for memory-mapped file
+struct vma
+{
+  uint64 base_va;
+  uint64 len;
+  struct file *ofile;
+  uint8 prot;
+};
+
 #define CONSOLE 1
