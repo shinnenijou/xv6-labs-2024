@@ -517,6 +517,9 @@ sys_mmap(void)
   size_t len;
   argaddr(1, &len);
 
+  if (len == 0)
+    return -1;
+
   // assume that prot is PROT_READ or PROT_WRITE or both
   int prot;
   argint(2, &prot);
@@ -534,6 +537,13 @@ sys_mmap(void)
   {
     return -1;
   }
+
+  // check file permissions
+  if ((prot & PROT_WRITE) > 0 && !f->writable)
+    return -1;
+
+  if ((prot & PROT_READ) > 0 && !f->readable)
+    return -1;
 
   // assume offset is zero
   off_t offset;
