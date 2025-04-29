@@ -112,7 +112,7 @@ Score: 50/50
 Branch <i>pgtbl</i> contains the solution to [Lab Page tables](https://pdos.csail.mit.edu/6.828/2024/labs/pgtbl.html).
 
 ```
-$ git checkout syscall
+$ git checkout pgtbl
 ...
 $ make clean
 ...
